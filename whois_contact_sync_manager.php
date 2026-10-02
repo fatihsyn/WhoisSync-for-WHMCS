@@ -101,6 +101,9 @@ function whois_contact_sync_manager_output($vars)
         case 'ajaxViewContacts':
             $controller->ajaxViewContacts();
             break;
+        case 'ajax_get_sync_queue':
+            $controller->ajaxGetSyncQueue();
+            break;
         case 'updated':
             echo $controller->updated();
             break;

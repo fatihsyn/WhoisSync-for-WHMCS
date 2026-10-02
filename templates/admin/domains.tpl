@@ -3,8 +3,8 @@
     <p><?php echo isset($LANG['desc']) ? $LANG['desc'] : 'Burada WHMCS üzerindeki domainlerin listesi bulunacaktır. Arama ve filtreleme özellikleri ile domainlerin WHOIS bilgilerini senkronize edebilirsiniz.'; ?></p>
     
     <div style="margin-bottom: 20px;">
-        <button class="btn btn-primary" onclick="alert('Toplu güncelleme onay popup\'ı çıkacak.')"><?php echo isset($LANG['sync_all']) ? $LANG['sync_all'] : 'Tümünü Güncelle'; ?></button>
-        <button class="btn btn-default" onclick="alert('Seçilenler güncellenecek.')"><?php echo isset($LANG['sync_selected']) ? $LANG['sync_selected'] : 'Seçilenleri Güncelle'; ?></button>
+        <button class="btn btn-primary" onclick="startBulkSync('all')"><?php echo isset($LANG['sync_all']) ? $LANG['sync_all'] : 'Tümünü Güncelle'; ?></button>
+        <button class="btn btn-default" onclick="startBulkSync('selected')"><?php echo isset($LANG['sync_selected']) ? $LANG['sync_selected'] : 'Seçilenleri Güncelle'; ?></button>
     </div>
 
     <table class="table table-list dataTable">
@@ -143,3 +143,120 @@ function viewContacts(domainId) {
     </div>
   </div>
 </div>
+
+<!-- Bulk Sync Modal -->
+<div class="modal fade" id="bulkSyncModal" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title"><?php echo isset($LANG['sync']) ? $LANG['sync'] : 'Senkronizasyon İşlemi'; ?> (<span id="bulkSyncProgress">0/0</span>)</h4>
+      </div>
+      <div class="modal-body">
+        <div style="max-height: 400px; overflow-y: auto;">
+            <ul id="bulkSyncLogList" class="list-group">
+                <!-- Logs will appear here -->
+            </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" id="bulkSyncCloseBtn" disabled onclick="window.location.reload()"><?php echo isset($LANG['close']) ? $LANG['close'] : 'Kapat'; ?></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var syncQueue = [];
+var isSyncing = false;
+
+function startBulkSync(type) {
+    if (isSyncing) return;
+    
+    if (type === 'selected') {
+        syncQueue = [];
+        jQuery('.domain-checkbox:checked').each(function() {
+            syncQueue.push(jQuery(this).val());
+        });
+        
+        if (syncQueue.length === 0) {
+            alert("Lütfen en az bir domain seçin."); // Need language var here, but keeping it simple for now
+            return;
+        }
+        
+        startQueueProcess();
+    } else if (type === 'all') {
+        jQuery.ajax({
+            url: '<?php echo $modulelink; ?>&action=ajax_get_sync_queue',
+            type: 'GET',
+            success: function(res) {
+                if (res && res.status === 'success' && res.data.length > 0) {
+                    syncQueue = res.data;
+                    startQueueProcess();
+                } else {
+                    alert('Senkronize edilecek uygun domain bulunamadı.');
+                }
+            },
+            error: function() {
+                alert('Liste alınırken hata oluştu.');
+            }
+        });
+    }
+}
+
+function startQueueProcess() {
+    isSyncing = true;
+    jQuery('#bulkSyncLogList').empty();
+    jQuery('#bulkSyncProgress').text('0/' + syncQueue.length);
+    jQuery('#bulkSyncCloseBtn').prop('disabled', true);
+    jQuery('#bulkSyncModal').modal('show');
+    
+    processNextInQueue(0, syncQueue.length);
+}
+
+function processNextInQueue(currentIndex, totalCount) {
+    if (currentIndex >= totalCount) {
+        isSyncing = false;
+        jQuery('#bulkSyncCloseBtn').prop('disabled', false);
+        jQuery('#bulkSyncLogList').append('<li class="list-group-item list-group-item-info"><strong>Tüm işlemler tamamlandı!</strong></li>');
+        return;
+    }
+    
+    var domainId = syncQueue[currentIndex];
+    
+    jQuery.ajax({
+        url: '<?php echo $modulelink; ?>&action=ajax_sync',
+        type: 'POST',
+        data: { domain_id: domainId },
+        success: function(response) {
+            var badge = '';
+            var msg = '';
+            if (response && response.status === 'success') {
+                badge = '<span class="badge" style="background-color: #5cb85c;"><?php echo isset($LANG['success']) ? addslashes($LANG['success']) : 'Başarılı'; ?></span>';
+                msg = 'Domain ID: ' + domainId + ' başarıyla güncellendi.';
+            } else {
+                badge = '<span class="badge" style="background-color: #d9534f;"><?php echo isset($LANG['error']) ? addslashes($LANG['error']) : 'Hata'; ?></span>';
+                msg = 'Domain ID: ' + domainId + ' - ' + (response.message ? response.message : '<?php echo isset($LANG['unknown_error']) ? addslashes($LANG['unknown_error']) : 'Bilinmeyen Hata'; ?>');
+            }
+            
+            jQuery('#bulkSyncLogList').append('<li class="list-group-item">' + badge + msg + '</li>');
+            
+            // Scroll to bottom
+            var elem = document.getElementById('bulkSyncLogList').parentElement;
+            elem.scrollTop = elem.scrollHeight;
+            
+        },
+        error: function() {
+            var badge = '<span class="badge" style="background-color: #d9534f;"><?php echo isset($LANG['error']) ? addslashes($LANG['error']) : 'Hata'; ?></span>';
+            jQuery('#bulkSyncLogList').append('<li class="list-group-item">' + badge + 'Domain ID: ' + domainId + ' - Sunucu Bağlantı Hatası</li>');
+        },
+        complete: function() {
+            jQuery('#bulkSyncProgress').text((currentIndex + 1) + '/' + totalCount);
+            
+            // Add a small delay between requests to avoid rate limits
+            setTimeout(function() {
+                processNextInQueue(currentIndex + 1, totalCount);
+            }, 1000); // 1 second delay
+        }
+    });
+}
+</script>

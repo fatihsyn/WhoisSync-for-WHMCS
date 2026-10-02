@@ -161,6 +161,38 @@ class AdminController
         exit;
     }
 
+    public function ajaxGetSyncQueue()
+    {
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json');
+
+        $logManager = new \WhoisContactSync\Service\JsonLogManager();
+        $allLogs = $logManager->getLogs();
+        $successfulDomainIds = [];
+        foreach ($allLogs as $log) {
+            if ($log['status'] === 'success') {
+                $successfulDomainIds[] = $log['domain_id'];
+            }
+        }
+        $successfulDomainIds = array_unique($successfulDomainIds);
+
+        $filters = ['status' => 'Active', 'exclude_ids' => $successfulDomainIds];
+        $repo = new \WhoisContactSync\Repository\DomainRepository();
+        
+        // Fetch all active domains excluding successful ones
+        $result = $repo->getDomainsList(0, 99999, $filters);
+        
+        $ids = [];
+        foreach ($result['data'] as $domain) {
+            $ids[] = $domain->id;
+        }
+
+        echo json_encode(['status' => 'success', 'data' => $ids]);
+        exit;
+    }
+
     public function ajaxSync()
     {
         while (ob_get_level()) {
