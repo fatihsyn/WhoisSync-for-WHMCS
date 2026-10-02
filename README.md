@@ -34,10 +34,6 @@ A highly professional, multi-language supported WHMCS addon module that synchron
 - **Optimization**: Prevents rate-limiting with configurable delays and batch processing.
 - **No Direct API Dependencies**: Leverages native WHMCS Registrar hooks (`RegGetContactDetails`, `RegSaveContactDetails`) ensuring 100% compatibility across all WHMCS supported registrars.
 
-## Author
-
-**Fatih SAYIN**
-
 ## License
 
 This project is open-source and available under the MIT License.

@@ -109,7 +109,21 @@ class AdminController
         $start = isset($_REQUEST['start']) ? (int)$_REQUEST['start'] : 0;
         $length = isset($_REQUEST['length']) ? (int)$_REQUEST['length'] : 10;
         
-        $filters = ['status' => 'Active'];
+        $logManager = new \WhoisContactSync\Service\JsonLogManager();
+        $allLogs = $logManager->getLogs();
+        $successfulDomainIds = [];
+        $latestUpdates = [];
+        foreach ($allLogs as $log) {
+            $did = $log['domain_id'];
+            if ($log['status'] === 'success') {
+                $successfulDomainIds[] = $did;
+            } elseif (!isset($latestUpdates[$did])) {
+                $latestUpdates[$did] = $log['timestamp'];
+            }
+        }
+        $successfulDomainIds = array_unique($successfulDomainIds);
+
+        $filters = ['status' => 'Active', 'exclude_ids' => $successfulDomainIds];
         if (!empty($_REQUEST['search']['value'])) {
             $filters['domain'] = $_REQUEST['search']['value'];
         }
@@ -124,6 +138,8 @@ class AdminController
             $buttons = '<button type="button" class="btn btn-sm btn-info" onclick="syncSingle('.$domain->id.')">'.$syncBtn.'</button> ';
             $buttons .= '<button type="button" class="btn btn-sm btn-default" onclick="viewContacts('.$domain->id.')">'.$viewBtn.'</button>';
             
+            $lastUpdateStr = isset($latestUpdates[$domain->id]) ? $latestUpdates[$domain->id] : (isset($this->lang['unknown_error']) ? str_replace(' Error', '', $this->lang['unknown_error']) : 'Unknown');
+
             $data[] = [
                 '<input type="checkbox" class="domain-checkbox" name="domain_ids[]" value="'.$domain->id.'">',
                 $domain->domain,
@@ -131,7 +147,7 @@ class AdminController
                 trim($domain->firstname . ' ' . $domain->lastname . ' ' . ($domain->companyname ? '('.$domain->companyname.')' : '')),
                 $domain->registrar,
                 $domain->status,
-                'Bilinmiyor',
+                $lastUpdateStr,
                 $buttons
             ];
         }

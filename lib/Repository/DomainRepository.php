@@ -37,6 +37,9 @@ class DomainRepository
         if (!empty($filters['registrar'])) {
             $query->where('tbldomains.registrar', $filters['registrar']);
         }
+        if (!empty($filters['exclude_ids']) && is_array($filters['exclude_ids'])) {
+            $query->whereNotIn('tbldomains.id', $filters['exclude_ids']);
+        }
 
         $total = $query->count();
         $domains = $query->offset($offset)->limit($limit)->get();
